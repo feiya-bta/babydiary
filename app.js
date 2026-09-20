@@ -64,7 +64,7 @@
   const DEFAULT_FIELDS = {
     pee:     () => ({ color: 'pucat' }),
     poop:    () => ({ amount: 2, color: 'kuning' }),
-    breast:  () => ({ ml: 30 }),
+    breast:  () => ({ ml: 0, min: 10 }),
     formula: () => ({ ml: 60 }),
     weight:  () => ({ kg: 5.00 })
   };
@@ -100,6 +100,7 @@
       // jenis catatan
       type_pee: 'Pipis', type_poop: 'BAB', type_breast: 'ASI', type_formula: 'Susu formula',
       types_pee: 'Pipis', types_poop: 'BAB', types_breast: 'ASI', types_formula: 'Formula',
+      lblDuration: 'Durasi', lblBottleMl: 'ASI botol', unitMin: 'mnt',
       type_weight: 'Berat badan', types_weight: 'Berat', amtWeight: 'Berat badan', kgLess: 'Kurangi berat', kgMore: 'Tambah berat',
       amount_1: 'Sedikit', amount_2: 'Sedang', amount_3: 'Banyak',
       pee_bening: 'Bening', pee_pucat: 'Kuning pucat', pee_kuning: 'Kuning', 'pee_kuning-tua': 'Kuning tua',
@@ -151,6 +152,7 @@
       history: 'History', calendar: 'Calendar', settings: 'Settings', today: 'Today', open: 'Open',
       type_pee: 'Pee', type_poop: 'Poop', type_breast: 'Breast milk', type_formula: 'Formula',
       types_pee: 'Pee', types_poop: 'Poop', types_breast: 'Breast', types_formula: 'Formula',
+      lblDuration: 'Duration', lblBottleMl: 'Bottle', unitMin: 'min',
       type_weight: 'Weight', types_weight: 'Weight', amtWeight: 'Weight', kgLess: 'Decrease weight', kgMore: 'Increase weight',
       amount_1: 'Small', amount_2: 'Medium', amount_3: 'Large',
       pee_bening: 'Clear', pee_pucat: 'Pale yellow', pee_kuning: 'Yellow', 'pee_kuning-tua': 'Dark yellow',
@@ -199,6 +201,7 @@
       history: '履歴', calendar: 'カレンダー', settings: '設定', today: '今日', open: '開く',
       type_pee: 'おしっこ', type_poop: 'うんち', type_breast: '母乳', type_formula: '粉ミルク',
       types_pee: 'おしっこ', types_poop: 'うんち', types_breast: '母乳', types_formula: 'ミルク',
+      lblDuration: '授乳時間', lblBottleMl: '哺乳瓶', unitMin: '分',
       type_weight: '体重', types_weight: '体重', amtWeight: '体重', kgLess: '体重を減らす', kgMore: '体重を増やす',
       amount_1: '少ない', amount_2: 'ふつう', amount_3: '多い',
       pee_bening: '透明', pee_pucat: '薄い黄色', pee_kuning: '黄色', 'pee_kuning-tua': '濃い黄色',
@@ -472,7 +475,8 @@
   function renderSummary() {
     const rs = state.records.filter(r => r.date === state.date);
     const cnt = ty => rs.filter(r => r.type === ty).length;
-    const sum = ty => rs.filter(r => r.type === ty).reduce((a, r) => a + (Number(r.ml) || 0), 0);
+    const sum = (ty, k = 'ml') => rs.filter(r => r.type === ty).reduce((a, r) => a + (Number(r[k]) || 0), 0);
+    const bMl = sum('breast'), bMin = sum('breast', 'min');
     const tile = (ty, v, unit, label = tl(ty), cls = '') => `
       <div class="tile ${cls}" style="--c:var(${TYPES[ty].cvar})">
         <div class="ic">${tIcon(ty)}</div>
@@ -487,7 +491,7 @@
     $('#summary').innerHTML =
       tile('pee', cnt('pee'), t('unitTimes')) +
       tile('poop', cnt('poop'), t('unitTimes')) +
-      tile('breast', sum('breast'), 'ml') +
+      tile('breast', bMin, t('unitMin'), bMl ? `${tl('breast')} · ${bMl} ml` : tl('breast')) +
       tile('formula', sum('formula'), 'ml') +
       tile('weight', lastW ? Number(lastW.kg).toFixed(2) : '–', lastW ? 'kg' : '', wLabel, 'wide');
   }
@@ -511,6 +515,12 @@
     if (r.type === 'poop') {
       const c = POOP_COLORS.find(x => x.id === r.color);
       return `<b>${esc(r.amount ? t('amount_' + r.amount) : '')}</b>${c ? `<span class="sep">·</span>${dot(c)}<span>${esc(t('poop_' + c.id))}</span>` : ''}`;
+    }
+    if (r.type === 'breast') {
+      const parts = [];
+      if (Number(r.min) > 0) parts.push(`<span><b>${r.min}</b> ${esc(t('unitMin'))}</span>`);
+      if (Number(r.ml) > 0) parts.push(`<span><b>${r.ml}</b> ml</span>`);
+      return parts.join('<span class="sep">·</span>');
     }
     if (r.type === 'weight') return `<span><b>${Number(r.kg).toFixed(2)}</b> kg</span>`;
     return `<span><b>${r.ml}</b> ml</span>`;
@@ -602,7 +612,7 @@
   function setType(type) {
     const d = state.draft;
     if (!d || !d.isNew || d.type === type) return;
-    ['color', 'amount', 'ml', 'kg'].forEach(k => delete d[k]);
+    ['color', 'amount', 'ml', 'kg', 'min'].forEach(k => delete d[k]);
     d.type = type;
     Object.assign(d, DEFAULT_FIELDS[type]());
     syncChooser();
@@ -677,20 +687,23 @@
       </div>`;
   }
 
-  function wheelField(label, value) {
+  const fmtVal = (v, unit, zero) => (zero && !v) ? '–' : `${v} ${unit}`;
+
+  function wheelField(label, value, o = {}) {
+    const { min = ML_MIN, max = ML_MAX, step = ML_STEP, unit = 'ml', key = 'ml', zero = false } = o;
     const vals = [];
-    for (let v = ML_MIN; v <= ML_MAX; v += ML_STEP) vals.push(v);
+    for (let v = min; v <= max; v += step) vals.push(v);
     return `
-      <div class="field" data-field="ml">
-        <div class="field-head"><span class="field-label">${esc(label)}</span><span class="field-value" data-role="ml-val">${value} ml</span></div>
-        <div class="wheel">
+      <div class="field" data-field="${key}">
+        <div class="field-head"><span class="field-label">${esc(label)}</span><span class="field-value" data-role="${key}-val">${esc(fmtVal(value, unit, zero))}</span></div>
+        <div class="wheel" data-key="${key}" data-unit="${esc(unit)}" data-zero="${zero ? 1 : 0}">
           <div class="wheel-band"></div>
-          <div class="wheel-scroll" tabindex="0" role="spinbutton" aria-label="${esc(t('inMl', { label }))}" aria-valuemin="${ML_MIN}" aria-valuemax="${ML_MAX}" aria-valuenow="${value}">
+          <div class="wheel-scroll" tabindex="0" role="spinbutton" aria-label="${esc(label + ' (' + unit + ')')}" aria-valuemin="${min}" aria-valuemax="${max}" aria-valuenow="${value}">
             <div class="wheel-pad"></div>
-            ${vals.map(v => `<div class="wheel-item" data-v="${v}">${v}</div>`).join('')}
+            ${vals.map(v => `<div class="wheel-item" data-v="${v}">${zero && v === 0 ? '–' : v}</div>`).join('')}
             <div class="wheel-pad"></div>
           </div>
-          <span class="wheel-unit">ml</span>
+          <span class="wheel-unit">${esc(unit)}</span>
         </div>
       </div>`;
   }
@@ -730,7 +743,9 @@
     let html = '';
     if (d.type === 'pee') html = colorField(t('colorPee'), PEE_COLORS, d.color, 'pee_');
     if (d.type === 'poop') html = amountField(d.amount) + colorField(t('colorPoop'), POOP_COLORS, d.color, 'poop_');
-    if (d.type === 'breast') html = wheelField(t('amtBreast'), d.ml);
+    if (d.type === 'breast') html = `<div class="wheel-pair">${
+      wheelField(t('lblDuration'), d.min || 0, { key: 'min', min: 0, max: 60, step: 1, unit: t('unitMin'), zero: true })}${
+      wheelField(t('lblBottleMl'), d.ml || 0, { key: 'ml', min: 0, unit: 'ml', zero: true })}</div>`;
     if (d.type === 'formula') html = wheelField(t('amtFormula'), d.ml);
     if (d.type === 'weight') html = weightField(d.kg);
     if (d.type !== 'weight') html += `<div class="field"><input class="input" type="text" data-role="note" maxlength="140" placeholder="${esc(t('notePh'))}" value="${esc(d.note || '')}"></div>`;
@@ -763,12 +778,14 @@
       $('[data-role="amount-name"]', body).textContent = t('amount_' + d.amount);
     });
 
-    // roda ml
-    const wheel = $('.wheel', body);
-    if (wheel) initWheel(wheel, d.ml, v => {
-      d.ml = v;
-      $('[data-role="ml-val"]', body).textContent = `${v} ml`;
-      $('.wheel-scroll', wheel).setAttribute('aria-valuenow', v);
+    // roda pilih (menit / ml)
+    $$('.wheel', body).forEach(wheel => {
+      const key = wheel.dataset.key, unit = wheel.dataset.unit, zero = wheel.dataset.zero === '1';
+      initWheel(wheel, d[key], v => {
+        d[key] = v;
+        $(`[data-role="${key}-val"]`, body).textContent = fmtVal(v, unit, zero);
+        $('.wheel-scroll', wheel).setAttribute('aria-valuenow', v);
+      });
     });
 
     // catatan
@@ -837,6 +854,7 @@
     if (d.type === 'pee') rec.color = d.color;
     if (d.type === 'poop') { rec.amount = d.amount; rec.color = d.color; }
     if (d.type === 'breast' || d.type === 'formula') rec.ml = d.ml;
+    if (d.type === 'breast') rec.min = d.min;
     if (d.type === 'weight') rec.kg = d.kg;
 
     if (d.isNew) state.records.push(rec);

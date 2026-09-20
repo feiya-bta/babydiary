@@ -547,7 +547,7 @@ button.avatar:active { transform: scale(.94); }
 
 /* ---------- Berat badan ---------- */
 .chooser-box { grid-template-columns: repeat(5, 1fr); gap: .2rem; padding-left: .35rem; padding-right: .35rem; }
-.type-ic { width: 3.6rem; height: 3.6rem; }
+.type-ic { width: 3.2rem; height: 3.2rem; }
 .type-ic svg { width: 1.6rem; height: 1.6rem; }
 .tile.wide { grid-column: 1 / -1; }
 
@@ -569,3 +569,11 @@ button.avatar:active { transform: scale(.94); }
 .kg-input::-webkit-outer-spin-button, .kg-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 .kg-input:focus { border-bottom-color: var(--c); }
 .kg-unit { font-size: 1.1rem; font-weight: 600; color: var(--c); }
+
+/* ---------- Roda ganda: durasi (menit) + ml ---------- */
+.wheel-pair { display: grid; grid-template-columns: 1fr 1fr; gap: .75rem; }
+.wheel-pair .field { min-width: 0; }
+.wheel-pair .field-head { flex-wrap: wrap; gap: .1rem .5rem; }
+.wheel-pair .field-value { color: var(--c); }
+.wheel-pair .wheel-item { font-size: 1.3rem; }
+.wheel-pair .wheel-unit { left: calc(50% + 1.35rem); font-size: .8rem; }
