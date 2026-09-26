@@ -1168,5 +1168,13 @@
   applySettings();
   bind();
   applyStaticText();
+  // Selalu buka ke tanggal hari ini saat aplikasi dibuka (abaikan hash lama
+  // yang mungkin masih tersimpan dari sesi sebelumnya, misal PWA/home screen)
+  (function goToTodayOnLaunch() {
+    const m = location.hash.match(/^#\/day\/(\d{4}-\d{2}-\d{2})$/);
+    if (!m || m[1] !== todayKey()) {
+      history.replaceState(null, '', '#/day/' + todayKey());
+    }
+  })();
   route();
 })();
